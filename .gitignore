@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+
+# uv / venv
+.venv/
+venv/
+env/
+
+# editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# generated audio (never commit)
+*.mp3
+*.wav
+*.ogg
+*.pcm
+
+# personal dev config
+.envrc
+.env
+.python-version
+
+# project-local benchmarks that write to /tmp
+/tmp/
+
+# local planning / review artifacts
+.hermes/
