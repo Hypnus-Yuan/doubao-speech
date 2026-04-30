@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 [![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9.svg)](https://github.com/astral-sh/uv)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen.svg)](https://pre-commit.com/)
 [![mypy strict](https://img.shields.io/badge/mypy-strict-blue.svg)](http://mypy-lang.org/)
-[![Downloads](https://static.pepy.tech/badge/doubao-speech/month)](https://pepy.tech/project/doubao-speech)
+[![Downloads](https://img.shields.io/pypi/dm/doubao-speech.svg)](https://pypistats.org/packages/doubao-speech)
 
 > A production-minded Python client and CLI for Volcengine Doubao voice APIs —
 > **seed-tts-2.0** (text → speech) and **bigmodel** (speech → text) in a single

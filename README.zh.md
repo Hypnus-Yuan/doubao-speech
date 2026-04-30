@@ -11,6 +11,7 @@
 [![uv](https://img.shields.io/badge/package%20manager-uv-de5fe9.svg)](https://github.com/astral-sh/uv)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen.svg)](https://pre-commit.com/)
 [![mypy strict](https://img.shields.io/badge/mypy-strict-blue.svg)](http://mypy-lang.org/)
+[![Downloads](https://img.shields.io/pypi/dm/doubao-speech.svg)](https://pypistats.org/packages/doubao-speech)
 
 > 面向 Agent、脚本、服务化 pipeline 的火山引擎豆包语音统一客户端 ——
 > 一个包同时支持 **seed-tts-2.0** 双向流式 TTS 和 **bigmodel** 流式 ASR。
