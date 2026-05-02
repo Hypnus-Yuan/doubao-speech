@@ -141,9 +141,21 @@ tts:
 
 所有 Hermes 的语音输出路径现在都走豆包 seed-tts-2.0。
 
-> Hermes 目前还没有 command-type STT provider，如果今天就想在 Hermes 里
-> 用豆包 ASR，STT 用内置的 `voice-volcengine` plugin（需单独安装），
-> TTS 交给 `doubao-speech`。
+语音转文字可以使用 Hermes 的 local-command STT provider，继续复用同一个
+`doubao-speech` CLI：
+
+```bash
+export HERMES_LOCAL_STT_COMMAND='doubao-speech transcribe {input_path} --out {output_dir}/transcript.txt'
+```
+
+```yaml
+# ~/.hermes/config.yaml
+stt:
+  provider: local_command
+```
+
+Hermes 会把收到的语音消息写到 `{input_path}`，运行上面的命令，然后读取
+`{output_dir}` 下生成的 `.txt` 转写结果。
 
 ## 音频格式支持
 

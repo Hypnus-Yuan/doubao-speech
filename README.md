@@ -145,9 +145,21 @@ tts:
 
 Any Hermes voice-out path now routes through Doubao seed-tts-2.0.
 
-> Hermes does not yet have a command-type STT provider; if you want Doubao
-> ASR in Hermes today, use the bundled `voice-volcengine` plugin (separate
-> install) for STT while `doubao-speech` handles TTS.
+For speech-to-text, use Hermes' local-command STT provider with the same
+`doubao-speech` CLI:
+
+```bash
+export HERMES_LOCAL_STT_COMMAND='doubao-speech transcribe {input_path} --out {output_dir}/transcript.txt'
+```
+
+```yaml
+# ~/.hermes/config.yaml
+stt:
+  provider: local_command
+```
+
+Hermes writes the incoming voice message to `{input_path}`, runs the command,
+and reads the `.txt` transcript produced under `{output_dir}`.
 
 ## Audio format support
 
