@@ -41,6 +41,9 @@ dependencies = [
 daemon = [
   "platformdirs>=4.3",
 ]
+mic = [
+  "pyaudio>=0.2.11",
+]
 
 [project.urls]
 Homepage = "https://github.com/Hypnus-Yuan/doubao-speech"

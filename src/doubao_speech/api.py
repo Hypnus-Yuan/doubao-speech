@@ -15,6 +15,7 @@ so that ``import doubao_speech`` stays cheap.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +133,50 @@ def synthesize(
 DEFAULT_ASR_RESOURCE_ID = "volc.bigasr.sauc.duration"
 
 
+def _asr_request_kwargs(
+    *,
+    cfg: DoubaoConfig,
+    audio_format: str,
+    codec: str,
+    sample_rate: int,
+    bits: int,
+    channel: int,
+    enable_itn: bool,
+    enable_punc: bool,
+    enable_ddc: bool,
+    segment_duration_ms: int,
+    resource_id: str | None,
+    endpoint: str | None,
+    timeout: float,
+    extras: dict[str, Any],
+) -> dict[str, Any]:
+    """Assemble the keyword arguments for :func:`_ws_client.asr_stream`.
+
+    Single source of truth shared by :func:`transcribe_async` and
+    :func:`transcribe_stream_async`, so the wire-request shape can't drift
+    between the buffered and streaming entry points.
+    """
+    kwargs: dict[str, Any] = {
+        "app_id": cfg.app_id,
+        "access_token": cfg.access_token,
+        "audio_format": audio_format,
+        "codec": codec,
+        "sample_rate": sample_rate,
+        "bits": bits,
+        "channel": channel,
+        "enable_itn": enable_itn,
+        "enable_punc": enable_punc,
+        "enable_ddc": enable_ddc,
+        "show_utterances": True,
+        "segment_duration_ms": segment_duration_ms,
+        "resource_id": resource_id or DEFAULT_ASR_RESOURCE_ID,
+        "endpoint": endpoint,
+        "timeout": timeout,
+    }
+    kwargs.update(extras)
+    return kwargs
+
+
 async def transcribe_async(
     audio: str | Path | bytes,
     *,
@@ -148,6 +193,7 @@ async def transcribe_async(
     app_id: str | None = None,
     access_token: str | None = None,
     resource_id: str | None = None,
+    endpoint: str | None = None,
     config: DoubaoConfig | None = None,
     timeout: float = 60.0,
     **extras: Any,
@@ -179,53 +225,54 @@ async def transcribe_async(
     segment_duration_ms :
         Size of each ASR audio chunk. Smaller = lower latency, higher
         network overhead.
+    endpoint :
+        Which Volcengine ASR endpoint to use. ``None`` (default) keeps the
+        standard ``bigmodel`` bidirectional endpoint. Accepts the aliases
+        ``"bigmodel"`` / ``"bigmodel_async"`` (optimized: server only emits a
+        packet when the result changes — better RTF and first/last-char
+        latency on genuinely streamed audio) / ``"bigmodel_nostream"``
+        (streaming-input: highest accuracy, higher latency), or an explicit
+        ``wss://`` URL. All endpoints share the same wire protocol.
 
     Returns
     -------
     str
         Final transcript (concatenated from all server-emitted utterances).
     """
-    cfg = config or DoubaoConfig.resolve(
-        app_id=app_id,
-        access_token=access_token,
-    )
+    cfg = config or DoubaoConfig.resolve(app_id=app_id, access_token=access_token)
 
     # Lazy import — keeps top-level `import doubao_speech` free of websockets.
     from . import _ws_client
 
-    # Normalize audio source: accept Path/str/bytes; infer format from
-    # extension when possible.
+    # Normalize audio source: accept Path/str/bytes; infer format from extension.
     if isinstance(audio, bytes):
         source: Any = audio
         inferred_format = audio_format or "raw"
     else:
-        path = Path(audio)
-        source = path
-        inferred_format = audio_format or _infer_audio_format(path)
+        source = Path(audio)
+        inferred_format = audio_format or _infer_audio_format(source)
 
-    request_kwargs: dict[str, Any] = {
-        "app_id": cfg.app_id,
-        "access_token": cfg.access_token,
-        "audio_format": inferred_format,
-        "codec": codec,
-        "sample_rate": sample_rate,
-        "bits": bits,
-        "channel": channel,
-        "enable_itn": enable_itn,
-        "enable_punc": enable_punc,
-        "enable_ddc": enable_ddc,
-        "show_utterances": True,
-        "segment_duration_ms": segment_duration_ms,
-        "resource_id": resource_id or DEFAULT_ASR_RESOURCE_ID,
-        "timeout": timeout,
-    }
-    # ``language``: Volcengine bigmodel auto-detects language via
-    # ``model_name``; this kwarg is accepted in our high-level API for
-    # symmetry with other STT libraries, but there is no dedicated
-    # language field on the wire. We silently ignore it rather than
-    # forward to the low-level client (which would raise TypeError).
-    _ = language  # reserved for future endpoints
-    request_kwargs.update(extras)
+    # ``language`` is accepted for cross-library symmetry but has no wire field
+    # on the bigmodel endpoint (language is auto-detected); we drop it rather
+    # than forward it to the low-level client.
+    _ = language
+
+    request_kwargs = _asr_request_kwargs(
+        cfg=cfg,
+        audio_format=inferred_format,
+        codec=codec,
+        sample_rate=sample_rate,
+        bits=bits,
+        channel=channel,
+        enable_itn=enable_itn,
+        enable_punc=enable_punc,
+        enable_ddc=enable_ddc,
+        segment_duration_ms=segment_duration_ms,
+        resource_id=resource_id,
+        endpoint=endpoint,
+        timeout=timeout,
+        extras=extras,
+    )
 
     transcript = ""
     try:
@@ -255,6 +302,144 @@ def transcribe(audio: str | Path | bytes, **kwargs: Any) -> str:
         "transcribe() cannot be called from a running event loop; "
         "use `await transcribe_async(...)` instead."
     )
+
+
+async def transcribe_stream_async(
+    audio_source: AsyncIterator[bytes],
+    *,
+    audio_format: str = "pcm",
+    codec: str = "raw",
+    sample_rate: int = 16000,
+    bits: int = 16,
+    channel: int = 1,
+    enable_itn: bool = True,
+    enable_punc: bool = True,
+    enable_ddc: bool = True,
+    segment_duration_ms: int = 200,
+    app_id: str | None = None,
+    access_token: str | None = None,
+    resource_id: str | None = None,
+    endpoint: str | None = None,
+    config: DoubaoConfig | None = None,
+    timeout: float = 30.0,
+    **extras: Any,
+) -> AsyncIterator[dict[str, Any]]:
+    """Stream transcription results from a live async audio source.
+
+    Unlike :func:`transcribe_async` (which buffers a finite source and returns
+    a single final string), this yields the incremental
+    ``{"text", "is_final", "utterances"}`` dicts as the server emits them —
+    suitable for an unbounded source such as a microphone.
+
+    ``audio_source`` must be an async iterator of raw audio bytes already in
+    the advertised ``audio_format`` / ``codec`` (default: PCM16 mono, the
+    format produced by :func:`doubao_speech.microphone_chunks`).
+
+    ``endpoint`` selects the ASR endpoint; see :func:`transcribe_async`. For
+    genuinely live streaming (e.g. a microphone) the ``"bigmodel_async"``
+    optimized endpoint is usually the better default.
+
+    Yields
+    ------
+    dict
+        ``{"text": str, "is_final": bool, "utterances": list}`` per update.
+    """
+    cfg = config or DoubaoConfig.resolve(app_id=app_id, access_token=access_token)
+
+    from . import _ws_client
+
+    request_kwargs = _asr_request_kwargs(
+        cfg=cfg,
+        audio_format=audio_format,
+        codec=codec,
+        sample_rate=sample_rate,
+        bits=bits,
+        channel=channel,
+        enable_itn=enable_itn,
+        enable_punc=enable_punc,
+        enable_ddc=enable_ddc,
+        segment_duration_ms=segment_duration_ms,
+        resource_id=resource_id,
+        endpoint=endpoint,
+        timeout=timeout,
+        extras=extras,
+    )
+
+    try:
+        async for result in _ws_client.asr_stream(audio_source, **request_kwargs):
+            yield result
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        raise _translate_ws_error(exc) from exc
+
+
+async def transcribe_microphone_async(
+    *,
+    sample_rate: int = 16000,
+    chunk_ms: int = 200,
+    device_index: int | None = None,
+    endpoint: str | None = "bigmodel_async",
+    enable_itn: bool = True,
+    enable_punc: bool = True,
+    enable_ddc: bool = True,
+    app_id: str | None = None,
+    access_token: str | None = None,
+    resource_id: str | None = None,
+    config: DoubaoConfig | None = None,
+    timeout: float = 30.0,
+    **extras: Any,
+) -> AsyncIterator[dict[str, Any]]:
+    """Transcribe live microphone audio, yielding incremental results.
+
+    Thin convenience wrapper that pipes :func:`doubao_speech.microphone_chunks`
+    into :func:`transcribe_stream_async`. Requires the optional ``pyaudio``
+    dependency (``pip install "doubao-speech[mic]"``).
+
+    Defaults to the ``"bigmodel_async"`` optimized endpoint, which is the
+    sweet spot for continuous live capture (the server only emits a packet
+    when the recognized text changes).
+
+    Yields
+    ------
+    dict
+        ``{"text", "is_final", "utterances"}`` per update. For an open mic the
+        stream is effectively unbounded; break out of the ``async for`` to stop.
+
+    Raises
+    ------
+    DoubaoConfigError
+        If ``pyaudio`` / PortAudio is unavailable.
+    """
+    from .microphone import ensure_pyaudio, microphone_chunks
+
+    # Fail fast on a missing pyaudio *before* opening the WebSocket, so the
+    # actionable install hint isn't masked by a later network/auth error.
+    ensure_pyaudio()
+
+    source = microphone_chunks(
+        sample_rate=sample_rate,
+        chunk_ms=chunk_ms,
+        device_index=device_index,
+    )
+    async for result in transcribe_stream_async(
+        source,
+        audio_format="pcm",
+        codec="raw",
+        sample_rate=sample_rate,
+        enable_itn=enable_itn,
+        enable_punc=enable_punc,
+        enable_ddc=enable_ddc,
+        segment_duration_ms=chunk_ms,
+        endpoint=endpoint,
+        app_id=app_id,
+        access_token=access_token,
+        resource_id=resource_id,
+        config=config,
+        timeout=timeout,
+        **extras,
+    ):
+        yield result
 
 
 _FORMAT_BY_EXT = {

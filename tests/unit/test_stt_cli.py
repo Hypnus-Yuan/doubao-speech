@@ -96,3 +96,64 @@ def test_transcribe_flags_forward(runner: CliRunner, tmp_path: Path) -> None:
     assert captured["enable_punc"] is False
     assert captured["sample_rate"] == 24000
     assert captured["segment_duration_ms"] == 500
+
+
+def test_transcribe_endpoint_forwarded(runner: CliRunner, tmp_path: Path) -> None:
+    audio = tmp_path / "in.wav"
+    audio.write_bytes(b"x")
+    captured: dict = {}
+
+    def fake(audio_path, **kw):
+        captured.update(kw)
+        return "ok"
+
+    with patch("doubao_speech.api.transcribe", fake):
+        result = runner.invoke(main, ["transcribe", str(audio), "--endpoint", "bigmodel_async"])
+    assert result.exit_code == 0, result.output
+    assert captured["endpoint"] == "bigmodel_async"
+
+
+def test_transcribe_requires_audio_or_mic(runner: CliRunner) -> None:
+    result = runner.invoke(main, ["transcribe"])
+    assert result.exit_code != 0
+    assert "AUDIO" in result.output or "--mic" in result.output
+
+
+def test_transcribe_mic_and_file_mutually_exclusive(runner: CliRunner, tmp_path: Path) -> None:
+    audio = tmp_path / "in.wav"
+    audio.write_bytes(b"x")
+    result = runner.invoke(main, ["transcribe", str(audio), "--mic"])
+    assert result.exit_code != 0
+    assert "not both" in result.output.lower()
+
+
+def test_transcribe_mic_streams_partials(runner: CliRunner) -> None:
+    """--mic drives transcribe_microphone_async and prints the final transcript."""
+
+    async def fake_mic(**_kw):
+        yield {"text": "你好", "is_final": False, "utterances": []}
+        yield {"text": "你好世界", "is_final": True, "utterances": []}
+
+    with (
+        patch("doubao_speech.microphone.ensure_pyaudio", lambda: None),
+        patch("doubao_speech.api.transcribe_microphone_async", fake_mic),
+    ):
+        result = runner.invoke(main, ["transcribe", "--mic"])
+    assert result.exit_code == 0, result.output
+    assert "你好世界" in result.output
+
+
+def test_transcribe_mic_missing_pyaudio_errors(runner: CliRunner) -> None:
+    """A clean exit-1 with install guidance when pyaudio is unavailable."""
+    from doubao_speech.exceptions import DoubaoConfigError
+
+    def boom_import() -> None:
+        raise DoubaoConfigError(
+            "microphone capture requires the 'pyaudio' package. "
+            "Install it with 'pip install \"doubao-speech[mic]\"'."
+        )
+
+    with patch("doubao_speech.microphone.ensure_pyaudio", boom_import):
+        result = runner.invoke(main, ["transcribe", "--mic"])
+    assert result.exit_code == 1
+    assert "pyaudio" in result.output

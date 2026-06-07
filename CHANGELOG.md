@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Selectable ASR endpoint via `endpoint=` on `transcribe` / `transcribe_async`
+  and `--endpoint` on the CLI. Accepts the aliases `bigmodel` (default),
+  `bigmodel_async` (optimized: emits only when the result changes — better
+  RTF and first/last-char latency on live streams), and `bigmodel_nostream`
+  (streaming-input: highest accuracy on whole-file uploads), or an explicit
+  `wss://` URL. All three share one wire protocol.
+- `transcribe_stream_async(audio_source, ...)` — yields incremental
+  `{"text", "is_final", "utterances"}` updates from any async byte source
+  (microphone, socket, real-time-paced file).
+- `transcribe_microphone_async(...)` — live microphone transcription,
+  defaulting to the `bigmodel_async` endpoint. Plus `microphone_chunks()`,
+  an async PCM16 capture generator. Requires the optional `mic` extra
+  (`pip install "doubao-speech[mic]"`; PortAudio is a system dependency).
+- CLI: `doubao-speech transcribe --mic` for live microphone input.
+
 ## [0.1.0] — 2026-05-01
 
 Initial public release. Unifies TTS and STT for Volcengine Doubao into one Python package.

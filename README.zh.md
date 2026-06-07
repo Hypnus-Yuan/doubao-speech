@@ -78,6 +78,43 @@ await synthesize_async(
 transcript = await transcribe_async("访谈.wav", enable_punc=True)
 ```
 
+### 实时麦克风 / 流式
+
+实时转写麦克风输入（需要可选的 `mic` 额外依赖：
+`pip install "doubao-speech[mic]"`）：
+
+```python
+from doubao_speech import transcribe_microphone_async
+
+async for result in transcribe_microphone_async():
+    print(result["text"], "(final)" if result["is_final"] else "")
+```
+
+`transcribe_microphone_async` 是底层 `transcribe_stream_async` 的轻量封装。
+后者接受**任意**异步字节源——麦克风、socket、按实时节奏分包的文件——并逐步
+yield `{"text", "is_final", "utterances"}` 增量结果：
+
+```python
+from doubao_speech import transcribe_stream_async, microphone_chunks
+
+async for result in transcribe_stream_async(microphone_chunks(), endpoint="bigmodel_async"):
+    ...
+```
+
+### 选择 ASR 接口
+
+火山引擎提供三个 bigmodel ASR 接口，三者共用同一套二进制协议，因此
+`doubao-speech` 允许按调用通过 `endpoint=`（或 CLI 的 `--endpoint`）切换：
+
+| `endpoint`            | 行为                                          | 适用场景 |
+| --------------------- | --------------------------------------------- | -------- |
+| `bigmodel`（默认）    | 双向流式；每输入一包返回一包                   | 首字时延最低 |
+| `bigmodel_async`      | 双向流式优化版；仅结果变化时返包               | 实时流式（RTF / 首尾字时延更优） |
+| `bigmodel_nostream`   | 流式输入；>15 s 或收尾包后返回                 | 整文件上传时准确率最高 |
+
+`transcribe_microphone_async` 默认使用 `bigmodel_async`，这是持续采集的
+最佳选择。也可直接传入完整的 `wss://` URL。
+
 ### 命令行
 
 ```bash
@@ -89,6 +126,8 @@ doubao-speech say "好激动！" --voice zh-female-warm --speed 1.2 --out excite
 doubao-speech transcribe 会议.mp3
 doubao-speech transcribe 语音留言.ogg --out transcript.txt
 doubao-speech transcribe 录音.wav --no-punctuation --sample-rate 16000
+doubao-speech transcribe 录音.wav --endpoint bigmodel_async   # 优化版接口
+doubao-speech transcribe --mic                                # 实时麦克风（需 [mic]）
 
 # 音色列表
 doubao-speech list-voices --lang zh

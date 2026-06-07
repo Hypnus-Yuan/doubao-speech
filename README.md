@@ -82,6 +82,45 @@ await synthesize_async(
 transcript = await transcribe_async("interview.wav", enable_punc=True)
 ```
 
+### Live microphone / streaming
+
+Transcribe the microphone in real time (needs the optional `mic` extra:
+`pip install "doubao-speech[mic]"`):
+
+```python
+from doubao_speech import transcribe_microphone_async
+
+async for result in transcribe_microphone_async():
+    print(result["text"], "(final)" if result["is_final"] else "")
+```
+
+`transcribe_microphone_async` is a thin wrapper over the lower-level
+`transcribe_stream_async`, which accepts **any** async byte source — a mic,
+a socket, a file paced in real time — and yields incremental
+`{"text", "is_final", "utterances"}` updates:
+
+```python
+from doubao_speech import transcribe_stream_async, microphone_chunks
+
+async for result in transcribe_stream_async(microphone_chunks(), endpoint="bigmodel_async"):
+    ...
+```
+
+### Choosing an ASR endpoint
+
+Volcengine exposes three bigmodel ASR endpoints. They share one wire
+protocol, so `doubao-speech` lets you pick per call via `endpoint=`
+(or `--endpoint` on the CLI):
+
+| `endpoint`            | Behaviour                                              | Best for |
+| --------------------- | ----------------------------------------------------- | -------- |
+| `bigmodel` *(default)*| Bidirectional; one response per input packet          | Lowest first-char latency |
+| `bigmodel_async`      | Bidirectional, optimized; emits only when text changes | Live streaming (better RTF / first-&-last-char latency) |
+| `bigmodel_nostream`   | Streaming-input; returns after >15 s or the final packet | Highest accuracy on whole-file uploads |
+
+`transcribe_microphone_async` defaults to `bigmodel_async`, the sweet spot
+for continuous capture. You can also pass an explicit `wss://` URL.
+
 ### CLI
 
 ```bash
@@ -93,6 +132,8 @@ doubao-speech say "好激动！" --voice zh-female-warm --speed 1.2 --out excite
 doubao-speech transcribe meeting.mp3
 doubao-speech transcribe voice-note.ogg --out transcript.txt
 doubao-speech transcribe recording.wav --no-punctuation --sample-rate 16000
+doubao-speech transcribe recording.wav --endpoint bigmodel_async   # optimized endpoint
+doubao-speech transcribe --mic                                     # live microphone (needs [mic])
 
 # Voice catalog
 doubao-speech list-voices --lang zh
