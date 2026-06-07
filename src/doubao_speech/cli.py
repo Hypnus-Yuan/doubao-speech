@@ -126,6 +126,12 @@ def say(
 @click.argument(
     "audio",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=False,
+)
+@click.option(
+    "--mic",
+    is_flag=True,
+    help="Transcribe live microphone input instead of a file (needs the 'mic' extra).",
 )
 @click.option(
     "--out",
@@ -141,6 +147,17 @@ def say(
 )
 @click.option("--codec", type=click.Choice(["raw", "opus"]), default="raw", show_default=True)
 @click.option("--sample-rate", type=int, default=16000, show_default=True)
+@click.option(
+    "--endpoint",
+    type=click.Choice(["bigmodel", "bigmodel_async", "bigmodel_nostream"]),
+    default=None,
+    help=(
+        "ASR endpoint. 'bigmodel' (default) = bidirectional streaming; "
+        "'bigmodel_async' = optimized (server emits only on change, better "
+        "RTF/latency on live streams); 'bigmodel_nostream' = streaming-input "
+        "(highest accuracy, higher latency)."
+    ),
+)
 @click.option(
     "--language",
     help=(
@@ -160,11 +177,13 @@ def say(
 )
 @click.option("--timeout", type=float, default=60.0, show_default=True)
 def transcribe(
-    audio: Path,
+    audio: Path | None,
+    mic: bool,
     output: Path | None,
     audio_format: str | None,
     codec: str,
     sample_rate: int,
+    endpoint: str | None,
     language: str | None,
     no_itn: bool,
     no_punctuation: bool,
@@ -172,8 +191,28 @@ def transcribe(
     segment_ms: int,
     timeout: float,
 ) -> None:
-    """Transcribe AUDIO file using Volcengine bigmodel streaming ASR."""
+    """Transcribe an AUDIO file (or live --mic) using Volcengine bigmodel ASR."""
+    if mic and audio is not None:
+        raise click.UsageError("Use either AUDIO or --mic, not both.")
+    if not mic and audio is None:
+        raise click.UsageError("Provide an AUDIO file or pass --mic.")
+
+    if mic:
+        _run_microphone(
+            output=output,
+            sample_rate=sample_rate,
+            endpoint=endpoint,
+            enable_itn=not no_itn,
+            enable_punc=not no_punctuation,
+            enable_ddc=not no_ddc,
+            chunk_ms=segment_ms,
+            timeout=timeout,
+        )
+        return
+
     from .api import transcribe as _transcribe
+
+    assert audio is not None  # guaranteed by the usage checks above
 
     try:
         text = _transcribe(
@@ -181,6 +220,7 @@ def transcribe(
             audio_format=audio_format,
             codec=codec,
             sample_rate=sample_rate,
+            endpoint=endpoint,
             language=language,
             enable_itn=not no_itn,
             enable_punc=not no_punctuation,
@@ -197,6 +237,76 @@ def transcribe(
         click.echo(f"wrote {output}")
     else:
         click.echo(text)
+
+
+def _run_microphone(
+    *,
+    output: Path | None,
+    sample_rate: int,
+    endpoint: str | None,
+    enable_itn: bool,
+    enable_punc: bool,
+    enable_ddc: bool,
+    chunk_ms: int,
+    timeout: float,
+) -> None:
+    """Drive live microphone transcription, printing partials until Ctrl-C."""
+    import asyncio
+
+    from .api import transcribe_microphone_async
+    from .microphone import ensure_pyaudio
+
+    # Fail fast (before printing "listening…") if pyaudio/PortAudio is missing,
+    # so the install hint is the first and only thing the user sees.
+    try:
+        ensure_pyaudio()
+    except DoubaoSpeechError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(1)
+
+    # The mic stream is unbounded; bigmodel_async is the sensible default but
+    # respect an explicit --endpoint when the user passed one.
+    mic_endpoint = endpoint or "bigmodel_async"
+    final_text = ""
+
+    async def _drive() -> str:
+        nonlocal final_text
+        last = ""
+        click.echo("listening… (Ctrl-C to stop)", err=True)
+        async for result in transcribe_microphone_async(
+            sample_rate=sample_rate,
+            chunk_ms=chunk_ms,
+            endpoint=mic_endpoint,
+            enable_itn=enable_itn,
+            enable_punc=enable_punc,
+            enable_ddc=enable_ddc,
+            timeout=timeout,
+        ):
+            text = result.get("text", "")
+            if text and text != last:
+                last = text
+                final_text = text
+                if not output:
+                    # Live partials to stderr so stdout stays the clean transcript.
+                    click.echo(f"\r{text}", nl=False, err=True)
+        return final_text
+
+    try:
+        result_text = asyncio.run(_drive())
+    except KeyboardInterrupt:
+        result_text = final_text
+        click.echo("", err=True)
+    except DoubaoSpeechError as exc:
+        click.echo(f"\nerror: {exc}", err=True)
+        sys.exit(1)
+
+    if not output:
+        click.echo("", err=True)  # newline after the live partial line
+    if output:
+        Path(output).write_text(result_text, encoding="utf-8")
+        click.echo(f"wrote {output}")
+    else:
+        click.echo(result_text)
 
 
 # ---------------------------------------------------------------------------

@@ -40,6 +40,50 @@ logger = logging.getLogger(__name__)
 TTS_URL = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
 ASR_URL = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
 
+#: Friendly aliases for the three Volcengine bigmodel ASR endpoints.
+#:
+#: All three share the *identical* binary framing, auth headers and event
+#: flow — they differ only in the connection URL and in *when* the server
+#: emits result packets:
+#:
+#: - ``bigmodel``         — bidirectional streaming; one response per input
+#:   packet (lowest first-char latency, baseline).
+#: - ``bigmodel_async``   — bidirectional streaming "optimized"; the server
+#:   only emits a new packet when the result actually changes (better RTF
+#:   and first/last-char latency on genuinely streamed audio). Volcengine
+#:   recommends this as the default.
+#: - ``bigmodel_nostream``— streaming-input mode; results come back only
+#:   after >15s of audio or the final (negative) packet (highest accuracy,
+#:   higher latency; required for the ``language`` hint and second-pass
+#:   ``enable_nonstream`` recognition).
+#:
+#: Reference: https://www.volcengine.com/docs/6561/1354869
+ASR_ENDPOINTS: dict[str, str] = {
+    "bigmodel": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel",
+    "bigmodel_async": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
+    "bigmodel_nostream": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream",
+}
+
+
+def resolve_asr_url(endpoint: str | None) -> str:
+    """Resolve an ASR endpoint alias (or raw ``wss://`` URL) to a URL.
+
+    ``None`` → the default :data:`ASR_URL` (``bigmodel``). A value present in
+    :data:`ASR_ENDPOINTS` is mapped to its URL. Any string starting with
+    ``ws://`` / ``wss://`` is treated as an explicit URL and returned as-is.
+    Anything else raises :class:`VolcengineParamError`.
+    """
+    if endpoint is None:
+        return ASR_URL
+    if endpoint in ASR_ENDPOINTS:
+        return ASR_ENDPOINTS[endpoint]
+    if endpoint.startswith(("ws://", "wss://")):
+        return endpoint
+    raise VolcengineParamError(
+        f"unknown ASR endpoint {endpoint!r}; expected one of "
+        f"{sorted(ASR_ENDPOINTS)} or an explicit ws(s):// URL"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -792,6 +836,7 @@ async def asr_stream(
     access_token: str | None = None,
     resource_id: str = "volc.bigasr.sauc.duration",
     request_id: str | None = None,
+    endpoint: str | None = None,
     timeout: float = 30.0,
 ) -> AsyncIterator[dict]:
     """Stream ASR recognition. Yields ``{text, is_final, utterances}`` dicts.
@@ -800,9 +845,16 @@ async def asr_stream(
     consumer starts seeing partial transcripts as soon as the server emits
     them. Terminates when ``is_last_package`` is set, ``is_final`` is True,
     or the socket closes cleanly.
+
+    ``endpoint`` selects the Volcengine ASR endpoint. ``None`` uses the default
+    ``bigmodel`` URL; pass an alias (``bigmodel`` / ``bigmodel_async`` /
+    ``bigmodel_nostream``) or an explicit ``wss://`` URL — see
+    :func:`resolve_asr_url`. All three endpoints share the same wire protocol,
+    so only the connection URL changes.
     """
     app_id, access_token = _resolve_credentials(app_id, access_token)
     headers = _build_headers(app_id, access_token, resource_id, request_id)
+    ws_url = resolve_asr_url(endpoint)
 
     # When the source is a file or bytes, our chunk generator decodes it into
     # raw PCM16 mono at `sample_rate`. The wire-level `format` we advertise to
@@ -837,12 +889,16 @@ async def asr_stream(
     }
 
     logger.info(
-        "asr: connecting (model=%s, rate=%d, wire_format=%s)", model_name, sample_rate, wire_format
+        "asr: connecting (model=%s, rate=%d, wire_format=%s, url=%s)",
+        model_name,
+        sample_rate,
+        wire_format,
+        ws_url,
     )
     try:
         ws = await asyncio.wait_for(
             websockets.connect(
-                ASR_URL,
+                ws_url,
                 additional_headers=headers,
                 max_size=16 * 1024 * 1024,
                 open_timeout=timeout,

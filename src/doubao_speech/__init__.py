@@ -63,15 +63,25 @@ __all__ = [
     "DoubaoTTSError",
     "DoubaoTimeoutError",
     "__version__",
+    "microphone_chunks",
     "synthesize",
     "synthesize_async",
     "transcribe",
     "transcribe_async",
+    "transcribe_microphone_async",
+    "transcribe_stream_async",
 ]
 
 
 if TYPE_CHECKING:  # pragma: no cover — import-time-free type hints only
-    from .api import synthesize, synthesize_async, transcribe, transcribe_async
+    from .api import (
+        synthesize,
+        synthesize_async,
+        transcribe,
+        transcribe_async,
+        transcribe_microphone_async,
+        transcribe_stream_async,
+    )
     from .config import DoubaoConfig
     from .exceptions import (
         DoubaoAPIError,
@@ -81,6 +91,7 @@ if TYPE_CHECKING:  # pragma: no cover — import-time-free type hints only
         DoubaoTimeoutError,
         DoubaoTTSError,
     )
+    from .microphone import microphone_chunks
 
 
 _LAZY_ATTRS = {
@@ -88,6 +99,9 @@ _LAZY_ATTRS = {
     "synthesize_async": ("doubao_speech.api", "synthesize_async"),
     "transcribe": ("doubao_speech.api", "transcribe"),
     "transcribe_async": ("doubao_speech.api", "transcribe_async"),
+    "transcribe_stream_async": ("doubao_speech.api", "transcribe_stream_async"),
+    "transcribe_microphone_async": ("doubao_speech.api", "transcribe_microphone_async"),
+    "microphone_chunks": ("doubao_speech.microphone", "microphone_chunks"),
     "DoubaoConfig": ("doubao_speech.config", "DoubaoConfig"),
     "DoubaoSpeechError": ("doubao_speech.exceptions", "DoubaoSpeechError"),
     "DoubaoTTSError": ("doubao_speech.exceptions", "DoubaoTTSError"),
