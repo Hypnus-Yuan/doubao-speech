@@ -31,6 +31,9 @@ def _configure_logging(verbose: int) -> None:
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+    # websockets DEBUG logs dump every handshake header, including Volcengine
+    # credentials. Keep protocol logging at INFO or quieter even under -vv.
+    logging.getLogger("websockets").setLevel(max(level, logging.INFO))
 
 
 @click.group(
@@ -352,6 +355,7 @@ def config_show() -> None:
 
     click.echo(f"app_id       : {redact_secret(cfg.app_id)}")
     click.echo(f"access_token : {redact_secret(cfg.access_token)}")
+    click.echo(f"api_key      : {redact_secret(cfg.api_key)}")
     click.echo(f"speaker      : {cfg.speaker}")
     click.echo(f"audio_format : {cfg.audio_format}")
     click.echo(f"sample_rate  : {cfg.sample_rate}")

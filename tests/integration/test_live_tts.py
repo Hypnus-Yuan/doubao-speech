@@ -1,7 +1,7 @@
 """Live end-to-end test against the real Volcengine seed-tts-2.0 endpoint.
 
-Gated behind ``-m integration`` and skipped automatically when
-``VOLCENGINE_APP_ID`` / ``VOLCENGINE_ACCESS_TOKEN`` are not set.
+Gated behind ``-m integration`` and skipped automatically when neither
+``DOUBAO_API_KEY`` nor the legacy App ID / Access Token pair is set.
 
 CI runs this only on pushes from trusted branches where repo secrets
 are available. PRs from forks get the unit suite only.
@@ -18,7 +18,11 @@ pytestmark = pytest.mark.integration
 
 
 def _have_creds() -> bool:
-    return bool(os.environ.get("VOLCENGINE_APP_ID") and os.environ.get("VOLCENGINE_ACCESS_TOKEN"))
+    legacy_app_id = os.environ.get("VOLCENGINE_APP_ID") or os.environ.get("DOUBAO_APP_ID")
+    legacy_access_token = os.environ.get("VOLCENGINE_ACCESS_TOKEN") or os.environ.get(
+        "DOUBAO_ACCESS_TOKEN"
+    )
+    return bool(os.environ.get("DOUBAO_API_KEY") or (legacy_app_id and legacy_access_token))
 
 
 @pytest.mark.skipif(not _have_creds(), reason="No Volcengine credentials in env")

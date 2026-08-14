@@ -2,7 +2,8 @@
 
 Volcengine API calls carry two sensitive things that must never hit logs:
 
-1. The ``access_token`` — leaking it gives another party full TTS quota.
+1. The ``api_key`` or legacy ``access_token`` — leaking either gives another
+   party access to the associated speech quota.
 2. The synthesis ``text`` — users may be reading private agent output,
    customer messages, or confidential documents aloud.
 

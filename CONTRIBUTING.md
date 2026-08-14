@@ -19,7 +19,7 @@ uv run ruff format .          # format
 uv run ruff check . --fix     # lint + autofix
 uv run mypy                   # type-check
 uv run pytest                 # unit tests only
-uv run pytest -m integration  # live-credential suite (needs VOLCENGINE_*)
+uv run pytest -m integration  # live-credential suite (API key or legacy pair)
 uv build                      # produce sdist + wheel
 ```
 
@@ -29,6 +29,10 @@ Integration tests hit the real Volcengine seed-tts-2.0 endpoint. Set
 credentials in your shell before running them:
 
 ```bash
+# New console
+export DOUBAO_API_KEY="..."
+
+# Or use the legacy console credentials
 export VOLCENGINE_APP_ID="..."
 export VOLCENGINE_ACCESS_TOKEN="..."
 uv run pytest -m integration
@@ -52,7 +56,7 @@ These are never run in CI for PRs from forks to avoid leaking secrets.
   `websockets`, `yaml`, or anything else with >1 ms cost. Enforced by
   `tests/unit/test_import.py`.
 - **Credentials never hit logs in full.** Any new code path that touches
-  an access token must go through `_logging.redact_secret`.
+  an API key or access token must go through `_logging.redact_secret`.
 - **Synthesis text is private.** Request payloads are logged at length
   only; raw-payload tracing is opt-in via `DOUBAO_SPEECH_TRACE_PAYLOADS=1`.
 - **Small public surface.** We'd rather expose one `synthesize()` that

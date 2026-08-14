@@ -51,6 +51,17 @@ def test_sync_synthesize_writes_file(
     assert out.read_bytes() == b"MP3FAKE"
 
 
+def test_api_key_credentials_propagate(
+    fake_ws: _RecordingFakeTTS,
+    tmp_path: Path,
+) -> None:
+    synthesize("hi", tmp_path / "o.mp3", api_key="new_api_key")
+
+    assert fake_ws.last_kwargs["api_key"] == "new_api_key"
+    assert fake_ws.last_kwargs["app_id"] is None
+    assert fake_ws.last_kwargs["access_token"] is None
+
+
 def test_credentials_propagate(
     fake_ws: _RecordingFakeTTS,
     tmp_path: Path,

@@ -157,6 +157,20 @@ async def test_transcribe_stream_yields_incremental(fake_asr: _RecordingFakeASR)
     assert results[-1]["is_final"] is True
 
 
+async def test_transcribe_stream_api_key_propagates(fake_asr: _RecordingFakeASR) -> None:
+    from doubao_speech import transcribe_stream_async
+
+    async for _ in transcribe_stream_async(
+        _aiter([b"\x00\x00"]),
+        api_key="new_api_key",
+    ):
+        pass
+
+    assert fake_asr.last_kwargs["api_key"] == "new_api_key"
+    assert fake_asr.last_kwargs["app_id"] is None
+    assert fake_asr.last_kwargs["access_token"] is None
+
+
 async def test_transcribe_stream_forwards_endpoint(fake_asr: _RecordingFakeASR) -> None:
     from doubao_speech import transcribe_stream_async
 

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
-from doubao_speech.cli import main
+from doubao_speech.cli import _configure_logging, main
 
 
 @pytest.fixture
@@ -22,6 +23,16 @@ def test_help(runner: CliRunner) -> None:
     assert "say" in result.output
     assert "list-voices" in result.output
     assert "config" in result.output
+
+
+def test_double_verbose_suppresses_websockets_handshake_debug() -> None:
+    ws_logger = logging.getLogger("websockets")
+    previous_level = ws_logger.level
+    try:
+        _configure_logging(2)
+        assert ws_logger.level == logging.INFO
+    finally:
+        ws_logger.setLevel(previous_level)
 
 
 def test_version(runner: CliRunner) -> None:
@@ -73,6 +84,19 @@ def test_config_show_redacts(
     assert result.exit_code == 0
     assert "tok_very_long_secret_value" not in result.output
     assert "tok_" in result.output  # prefix visible, middle hidden
+
+
+def test_config_show_redacts_api_key(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DOUBAO_API_KEY", "api_very_long_secret_value")
+
+    result = runner.invoke(main, ["config", "show"])
+
+    assert result.exit_code == 0
+    assert "api_very_long_secret_value" not in result.output
+    assert "api_...alue" in result.output
 
 
 def test_say_requires_text_or_file(runner: CliRunner, tmp_path: Path) -> None:

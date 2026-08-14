@@ -36,6 +36,7 @@ DEFAULT_SAMPLE_RATE = 24000
 
 _ENV_APP_ID = ("VOLCENGINE_APP_ID", "DOUBAO_APP_ID")
 _ENV_ACCESS_TOKEN = ("VOLCENGINE_ACCESS_TOKEN", "DOUBAO_ACCESS_TOKEN")
+_ENV_API_KEY = ("DOUBAO_API_KEY",)
 _ENV_RESOURCE_ID = ("VOLCENGINE_RESOURCE_ID", "DOUBAO_RESOURCE_ID")
 
 
@@ -43,7 +44,8 @@ _ENV_RESOURCE_ID = ("VOLCENGINE_RESOURCE_ID", "DOUBAO_RESOURCE_ID")
 class DoubaoConfig:
     """Resolved, ready-to-use configuration for a synthesis call.
 
-    Only ``app_id`` and ``access_token`` are strictly required. ``speaker``,
+    Authentication requires either ``api_key`` or the legacy ``app_id`` and
+    ``access_token`` pair. ``speaker``,
     ``audio_format``, and ``sample_rate`` have safe defaults. ``resource_id``
     is optional; Volcengine uses a default resource for seed-tts-2.0 when
     omitted.
@@ -52,20 +54,23 @@ class DoubaoConfig:
     hand — it applies the full precedence rules and validates credentials.
     """
 
-    app_id: str
-    access_token: str
+    app_id: str | None = None
+    access_token: str | None = None
     speaker: str = DEFAULT_SPEAKER
     audio_format: str = DEFAULT_AUDIO_FORMAT
     sample_rate: int = DEFAULT_SAMPLE_RATE
     resource_id: str | None = None
     # free-form extras survive config → request mapping unchanged
     extras: dict[str, Any] = field(default_factory=dict)
+    # Added after legacy fields to preserve positional-constructor compatibility.
+    api_key: str | None = None
 
-    def __repr__(self) -> str:  # safe repr — never leaks token
+    def __repr__(self) -> str:  # safe repr — never leaks credentials
         return (
             "DoubaoConfig("
             f"app_id={redact_secret(self.app_id)!r}, "
             f"access_token={redact_secret(self.access_token)!r}, "
+            f"api_key={redact_secret(self.api_key)!r}, "
             f"speaker={self.speaker!r}, "
             f"audio_format={self.audio_format!r}, "
             f"sample_rate={self.sample_rate}, "
@@ -81,6 +86,7 @@ class DoubaoConfig:
         *,
         app_id: str | None = None,
         access_token: str | None = None,
+        api_key: str | None = None,
         speaker: str | None = None,
         audio_format: str | None = None,
         sample_rate: int | None = None,
@@ -121,15 +127,49 @@ class DoubaoConfig:
                 return file_cfg[file_key]
             return default
 
-        resolved_app_id = pick(app_id, _ENV_APP_ID, "app_id", None)
-        resolved_token = pick(access_token, _ENV_ACCESS_TOKEN, "access_token", None)
+        def first_env(keys: tuple[str, ...]) -> Any:
+            for key in keys:
+                value = env_map.get(key)
+                if value:
+                    return value
+            return None
 
-        if not resolved_app_id:
+        explicit_legacy = app_id is not None or access_token is not None
+        env_api_key = first_env(_ENV_API_KEY)
+        env_app_id = first_env(_ENV_APP_ID)
+        env_access_token = first_env(_ENV_ACCESS_TOKEN)
+
+        if api_key:
+            resolved_api_key = api_key
+            resolved_app_id = None
+            resolved_token = None
+        elif explicit_legacy:
+            resolved_api_key = None
+            resolved_app_id = pick(app_id, _ENV_APP_ID, "app_id", None)
+            resolved_token = pick(access_token, _ENV_ACCESS_TOKEN, "access_token", None)
+        elif env_api_key:
+            resolved_api_key = env_api_key
+            resolved_app_id = None
+            resolved_token = None
+        elif env_app_id or env_access_token:
+            resolved_api_key = None
+            resolved_app_id = env_app_id or file_cfg.get("app_id")
+            resolved_token = env_access_token or file_cfg.get("access_token")
+        elif file_cfg.get("api_key"):
+            resolved_api_key = file_cfg["api_key"]
+            resolved_app_id = None
+            resolved_token = None
+        else:
+            resolved_api_key = None
+            resolved_app_id = file_cfg.get("app_id")
+            resolved_token = file_cfg.get("access_token")
+
+        if not resolved_api_key and not resolved_app_id:
             raise DoubaoConfigError(
-                "Missing app_id. Pass app_id=..., set VOLCENGINE_APP_ID, "
-                "or add app_id to ~/.doubao-speech/config.yaml."
+                "Missing credentials. Pass api_key=..., set DOUBAO_API_KEY, or provide "
+                "legacy app_id/access_token credentials."
             )
-        if not resolved_token:
+        if not resolved_api_key and not resolved_token:
             raise DoubaoConfigError(
                 "Missing access_token. Pass access_token=..., set "
                 "VOLCENGINE_ACCESS_TOKEN, or add access_token to "
@@ -137,8 +177,9 @@ class DoubaoConfig:
             )
 
         return cls(
-            app_id=str(resolved_app_id),
-            access_token=str(resolved_token),
+            app_id=str(resolved_app_id) if resolved_app_id else None,
+            access_token=str(resolved_token) if resolved_token else None,
+            api_key=str(resolved_api_key) if resolved_api_key else None,
             speaker=pick(speaker, None, "speaker", DEFAULT_SPEAKER),
             audio_format=pick(audio_format, None, "audio_format", DEFAULT_AUDIO_FORMAT),
             sample_rate=int(pick(sample_rate, None, "sample_rate", DEFAULT_SAMPLE_RATE)),
