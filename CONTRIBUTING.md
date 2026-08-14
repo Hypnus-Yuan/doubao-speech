@@ -19,7 +19,7 @@ uv run ruff format .          # format
 uv run ruff check . --fix     # lint + autofix
 uv run mypy                   # type-check
 uv run pytest                 # unit tests only
-uv run pytest -m integration  # live-credential suite (needs VOLCENGINE_*)
+uv run pytest -m integration  # live-credential suite (API key or legacy pair)
 uv build                      # produce sdist + wheel
 ```
 

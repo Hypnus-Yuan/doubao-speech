@@ -144,12 +144,13 @@ doubao-speech config show
 
 ## Credentials
 
-Resolve order — first match wins:
+Authentication precedence — first complete method wins:
 
-1. Keyword arguments to `synthesize(...)` / `transcribe(...)`
-2. Environment variables
-3. `~/.doubao-speech/config.yaml`
-4. Built-in defaults
+1. Explicit legacy `app_id=` / `access_token=` keyword arguments
+2. A complete legacy pair in the environment
+3. Explicit `api_key=` keyword argument
+4. `DOUBAO_API_KEY` / `VOLCENGINE_API_KEY` in the environment
+5. Credentials in `~/.doubao-speech/config.yaml`
 
 New Volcengine Speech console (recommended):
 
@@ -165,9 +166,9 @@ export VOLCENGINE_ACCESS_TOKEN="..."
 ```
 
 `DOUBAO_APP_ID` and `DOUBAO_ACCESS_TOKEN` are accepted as legacy aliases.
-When both authentication methods exist at the same resolution level,
-`DOUBAO_API_KEY` takes precedence. Explicit legacy keyword arguments still
-override an API key found in the environment or config file.
+Within the config file, API-key authentication takes precedence over a legacy
+pair. Partial explicit legacy credentials may be completed from the environment
+or config file; otherwise credential validation fails.
 
 Example `~/.doubao-speech/config.yaml`:
 

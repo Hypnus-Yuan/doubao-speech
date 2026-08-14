@@ -138,12 +138,13 @@ doubao-speech config show
 
 ## 凭证配置
 
-解析顺序（**上面的覆盖下面的**）：
+鉴权优先级（**首个完整可用的鉴权方式生效**）：
 
-1. `synthesize(...)` / `transcribe(...)` 的 keyword 参数
-2. 环境变量
-3. `~/.doubao-speech/config.yaml`
-4. 内置默认值
+1. 显式传入旧鉴权 `app_id=` / `access_token=` keyword 参数
+2. 环境变量中的完整旧鉴权参数对
+3. 显式传入 `api_key=` keyword 参数
+4. 环境变量 `DOUBAO_API_KEY` / `VOLCENGINE_API_KEY`
+5. `~/.doubao-speech/config.yaml` 中的凭证
 
 新版火山引擎语音控制台（推荐）：
 
@@ -158,9 +159,9 @@ export VOLCENGINE_APP_ID="..."
 export VOLCENGINE_ACCESS_TOKEN="..."
 ```
 
-旧鉴权也接受 `DOUBAO_APP_ID` / `DOUBAO_ACCESS_TOKEN` 别名。同一解析层级同时
-存在两种鉴权时优先使用 `DOUBAO_API_KEY`；显式传入旧鉴权 keyword 参数时，
-仍会覆盖环境变量或配置文件中的 API Key。
+旧鉴权也接受 `DOUBAO_APP_ID` / `DOUBAO_ACCESS_TOKEN` 别名。配置文件中同时存在
+两种鉴权时优先使用 API Key。显式传入不完整的旧鉴权参数时，可由环境变量或
+配置文件补齐；仍无法组成完整参数对则鉴权校验失败。
 
 `~/.doubao-speech/config.yaml` 示例：
 
