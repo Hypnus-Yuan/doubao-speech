@@ -147,20 +147,39 @@ doubao-speech config show
 Resolve order — first match wins:
 
 1. Keyword arguments to `synthesize(...)` / `transcribe(...)`
-2. Environment variables: `VOLCENGINE_APP_ID`, `VOLCENGINE_ACCESS_TOKEN`
-   (also accepted as `DOUBAO_APP_ID`, `DOUBAO_ACCESS_TOKEN`)
+2. Environment variables
 3. `~/.doubao-speech/config.yaml`
 4. Built-in defaults
+
+New Volcengine Speech console (recommended):
+
+```bash
+export DOUBAO_API_KEY="..."
+```
+
+Legacy App ID + Access Token authentication remains supported:
+
+```bash
+export VOLCENGINE_APP_ID="..."
+export VOLCENGINE_ACCESS_TOKEN="..."
+```
+
+`DOUBAO_APP_ID` and `DOUBAO_ACCESS_TOKEN` are accepted as legacy aliases.
+When both authentication methods exist at the same resolution level,
+`DOUBAO_API_KEY` takes precedence. Explicit legacy keyword arguments still
+override an API key found in the environment or config file.
 
 Example `~/.doubao-speech/config.yaml`:
 
 ```yaml
-app_id: "1234567890"
-access_token: "volc_...."
+api_key: "..."
 speaker: zh_female_vv_uranus_bigtts
 audio_format: mp3
 sample_rate: 24000
 ```
+
+For a legacy-console application, use `app_id` and `access_token` instead of
+`api_key` in the same file.
 
 Credentials come from the [Volcengine Speech console](https://console.volcengine.com/speech/service).
 You need **seed-tts-2.0** activated for TTS and a **bigmodel ASR** resource

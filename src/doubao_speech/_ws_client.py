@@ -351,34 +351,57 @@ class Message:
 # Headers
 # ---------------------------------------------------------------------------
 def _build_headers(
-    app_id: str,
-    access_token: str,
+    app_id: str | None,
+    access_token: str | None,
     resource_id: str,
     request_id: str | None,
+    api_key: str | None = None,
 ) -> dict[str, str]:
     """Construct the X-Api-* headers required by Volcengine voice endpoints.
 
-    X-Api-Connect-Id is always fresh (per the protocol spec).
+    X-Api-Connect-Id is always fresh (per the protocol spec). New-console
+    API-key auth takes precedence; otherwise the legacy App ID/token headers
+    are preserved.
     """
-    return {
-        "X-Api-App-Id": app_id,
-        "X-Api-App-Key": app_id,  # Some endpoints use App-Key; send both for compat.
-        "X-Api-Access-Key": access_token,
+    headers = {
         "X-Api-Resource-Id": resource_id,
         "X-Api-Request-Id": request_id or str(uuid.uuid4()),
         "X-Api-Connect-Id": str(uuid.uuid4()),
     }
+    if api_key:
+        headers["X-Api-Key"] = api_key
+    else:
+        if app_id is not None:
+            headers["X-Api-App-Id"] = app_id
+            headers["X-Api-App-Key"] = app_id
+        if access_token is not None:
+            headers["X-Api-Access-Key"] = access_token
+    return headers
 
 
-def _resolve_credentials(app_id: str | None, access_token: str | None) -> tuple[str, str]:
-    app_id = app_id or os.environ.get("VOLCENGINE_APP_ID")
-    access_token = access_token or os.environ.get("VOLCENGINE_ACCESS_TOKEN")
+def _resolve_credentials(
+    app_id: str | None,
+    access_token: str | None,
+    api_key: str | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    explicit_legacy = app_id is not None or access_token is not None
+    api_key = api_key or (None if explicit_legacy else os.environ.get("DOUBAO_API_KEY"))
+    if api_key:
+        return None, None, api_key
+
+    app_id = app_id or os.environ.get("VOLCENGINE_APP_ID") or os.environ.get("DOUBAO_APP_ID")
+    access_token = (
+        access_token
+        or os.environ.get("VOLCENGINE_ACCESS_TOKEN")
+        or os.environ.get("DOUBAO_ACCESS_TOKEN")
+    )
     if not app_id or not access_token:
         raise VolcengineAuthError(
-            "missing credentials: set VOLCENGINE_APP_ID and VOLCENGINE_ACCESS_TOKEN "
-            "environment variables, or pass app_id/access_token explicitly"
+            "missing credentials: set DOUBAO_API_KEY, or set VOLCENGINE_APP_ID and "
+            "VOLCENGINE_ACCESS_TOKEN (DOUBAO_APP_ID/DOUBAO_ACCESS_TOKEN are also accepted), "
+            "or pass credentials explicitly"
         )
-    return app_id, access_token
+    return app_id, access_token, None
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +486,7 @@ async def tts_stream(
     emotion_scale: int | None = None,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     resource_id: str = "seed-tts-2.0",
     request_id: str | None = None,
     timeout: float = 30.0,
@@ -487,8 +511,8 @@ async def tts_stream(
         VolcengineServerError: backend failure / 55000000.
         VolcengineTimeoutError: any phase exceeded the timeout.
     """
-    app_id, access_token = _resolve_credentials(app_id, access_token)
-    headers = _build_headers(app_id, access_token, resource_id, request_id)
+    app_id, access_token, api_key = _resolve_credentials(app_id, access_token, api_key)
+    headers = _build_headers(app_id, access_token, resource_id, request_id, api_key)
 
     # speed_ratio (1.0 multiplier) -> speech_rate (integer percent delta)
     speech_rate = round((speed_ratio - 1.0) * 100)
@@ -834,6 +858,7 @@ async def asr_stream(
     segment_duration_ms: int = 200,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     resource_id: str = "volc.bigasr.sauc.duration",
     request_id: str | None = None,
     endpoint: str | None = None,
@@ -852,8 +877,8 @@ async def asr_stream(
     :func:`resolve_asr_url`. All three endpoints share the same wire protocol,
     so only the connection URL changes.
     """
-    app_id, access_token = _resolve_credentials(app_id, access_token)
-    headers = _build_headers(app_id, access_token, resource_id, request_id)
+    app_id, access_token, api_key = _resolve_credentials(app_id, access_token, api_key)
+    headers = _build_headers(app_id, access_token, resource_id, request_id, api_key)
     ws_url = resolve_asr_url(endpoint)
 
     # When the source is a file or bytes, our chunk generator decodes it into

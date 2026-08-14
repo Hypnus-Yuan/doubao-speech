@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New-console API-key authentication via `DOUBAO_API_KEY`, the `api_key=`
+  public-API argument, and `api_key` in `~/.doubao-speech/config.yaml`.
+  Requests use the `X-Api-Key` header. The existing App ID + Access Token
+  mechanism remains supported as a fallback.
 - Selectable ASR endpoint via `endpoint=` on `transcribe` / `transcribe_async`
   and `--endpoint` on the CLI. Accepts the aliases `bigmodel` (default),
   `bigmodel_async` (optimized: emits only when the result changes — better

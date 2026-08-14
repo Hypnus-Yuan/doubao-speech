@@ -14,12 +14,51 @@ from doubao_speech.config import (
 from doubao_speech.exceptions import DoubaoConfigError
 
 
+def test_api_key_env_authenticates_without_legacy_credentials() -> None:
+    cfg = DoubaoConfig.resolve(env={"DOUBAO_API_KEY": "api_key_value"})
+
+    assert cfg.api_key == "api_key_value"
+    assert cfg.app_id is None
+    assert cfg.access_token is None
+
+
+def test_explicit_legacy_credentials_override_env_api_key() -> None:
+    cfg = DoubaoConfig.resolve(
+        app_id="kw_id",
+        access_token="kw_token",
+        env={"DOUBAO_API_KEY": "env_api_key"},
+    )
+
+    assert cfg.app_id == "kw_id"
+    assert cfg.access_token == "kw_token"
+    assert cfg.api_key is None
+
+
 def test_kwarg_beats_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VOLCENGINE_APP_ID", "env_id")
     monkeypatch.setenv("VOLCENGINE_ACCESS_TOKEN", "env_token")
     cfg = DoubaoConfig.resolve(app_id="kw_id", access_token="kw_token")
     assert cfg.app_id == "kw_id"
     assert cfg.access_token == "kw_token"
+
+
+def test_env_legacy_credentials_override_file_api_key(
+    tmp_path: Path,
+) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("api_key: file_api_key\n")
+
+    cfg = DoubaoConfig.resolve(
+        config_path=config_file,
+        env={
+            "VOLCENGINE_APP_ID": "env_id",
+            "VOLCENGINE_ACCESS_TOKEN": "env_token",
+        },
+    )
+
+    assert cfg.app_id == "env_id"
+    assert cfg.access_token == "env_token"
+    assert cfg.api_key is None
 
 
 def test_env_beats_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,6 +125,15 @@ def test_empty_yaml_falls_through(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert cfg.app_id == "id"
 
 
+def test_positional_constructor_keeps_legacy_field_order() -> None:
+    cfg = DoubaoConfig("legacy_app", "legacy_token", "legacy_speaker")
+
+    assert cfg.app_id == "legacy_app"
+    assert cfg.access_token == "legacy_token"
+    assert cfg.speaker == "legacy_speaker"
+    assert cfg.api_key is None
+
+
 def test_merge_overrides_selected_fields(tmp_path: Path) -> None:
     base = DoubaoConfig(app_id="a", access_token="t", speaker="sp1")
     merged = base.merge(speaker="sp2")
@@ -99,6 +147,14 @@ def test_repr_redacts_token() -> None:
     r = repr(cfg)
     assert "abcdefghijklmnop" not in r
     assert "abcd...mnop" in r
+
+
+def test_repr_redacts_api_key() -> None:
+    cfg = DoubaoConfig(api_key="abcdefghijklmnopqrstuvwxyz")
+    r = repr(cfg)
+
+    assert "abcdefghijklmnopqrstuvwxyz" not in r
+    assert "abcd...wxyz" in r
 
 
 def test_env_alternate_names(monkeypatch: pytest.MonkeyPatch) -> None:

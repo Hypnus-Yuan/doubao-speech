@@ -58,6 +58,21 @@ def test_sync_transcribe_returns_text(
     assert text == "你好，测试。"
 
 
+def test_transcribe_api_key_credentials_propagate(
+    fake_asr: _RecordingFakeASR,
+    tmp_path: Path,
+) -> None:
+    from doubao_speech import transcribe
+
+    audio = tmp_path / "in.wav"
+    audio.write_bytes(b"x")
+    transcribe(audio, api_key="new_api_key")
+
+    assert fake_asr.last_kwargs["api_key"] == "new_api_key"
+    assert fake_asr.last_kwargs["app_id"] is None
+    assert fake_asr.last_kwargs["access_token"] is None
+
+
 def test_transcribe_credentials_propagate(
     fake_asr: _RecordingFakeASR,
     tmp_path: Path,

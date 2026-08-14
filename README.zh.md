@@ -141,20 +141,37 @@ doubao-speech config show
 解析顺序（**上面的覆盖下面的**）：
 
 1. `synthesize(...)` / `transcribe(...)` 的 keyword 参数
-2. 环境变量 `VOLCENGINE_APP_ID` / `VOLCENGINE_ACCESS_TOKEN`
-   （也接受 `DOUBAO_APP_ID` / `DOUBAO_ACCESS_TOKEN`）
+2. 环境变量
 3. `~/.doubao-speech/config.yaml`
 4. 内置默认值
+
+新版火山引擎语音控制台（推荐）：
+
+```bash
+export DOUBAO_API_KEY="..."
+```
+
+原有 App ID + Access Token 鉴权继续保留：
+
+```bash
+export VOLCENGINE_APP_ID="..."
+export VOLCENGINE_ACCESS_TOKEN="..."
+```
+
+旧鉴权也接受 `DOUBAO_APP_ID` / `DOUBAO_ACCESS_TOKEN` 别名。同一解析层级同时
+存在两种鉴权时优先使用 `DOUBAO_API_KEY`；显式传入旧鉴权 keyword 参数时，
+仍会覆盖环境变量或配置文件中的 API Key。
 
 `~/.doubao-speech/config.yaml` 示例：
 
 ```yaml
-app_id: "1234567890"
-access_token: "volc_...."
+api_key: "..."
 speaker: zh_female_vv_uranus_bigtts
 audio_format: mp3
 sample_rate: 24000
 ```
+
+旧版控制台应用可在同一文件中改用 `app_id` 和 `access_token`。
 
 凭证来自 [火山引擎语音控制台](https://console.volcengine.com/speech/service)，
 TTS 需要开通 **seed-tts-2.0**，STT 需要开通 **bigmodel** 流式 ASR 资源

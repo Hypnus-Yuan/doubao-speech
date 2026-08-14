@@ -41,6 +41,7 @@ async def synthesize_async(
     voice: str | None = None,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     audio_format: str | None = None,
     sample_rate: int | None = None,
     resource_id: str | None = None,
@@ -53,6 +54,9 @@ async def synthesize_async(
 ) -> Path:
     """Asynchronously synthesize ``text`` and write audio to ``output_path``.
 
+    Authenticate with ``api_key`` (new console) or the legacy
+    ``app_id`` / ``access_token`` pair.
+
     Returns
     -------
     pathlib.Path
@@ -61,6 +65,7 @@ async def synthesize_async(
     cfg = config or DoubaoConfig.resolve(
         app_id=app_id,
         access_token=access_token,
+        api_key=api_key,
         speaker=resolve_voice(voice) if voice else None,
         audio_format=audio_format,
         sample_rate=sample_rate,
@@ -72,6 +77,7 @@ async def synthesize_async(
     request_kwargs: dict[str, Any] = {
         "app_id": cfg.app_id,
         "access_token": cfg.access_token,
+        "api_key": cfg.api_key,
         "speaker": cfg.speaker,
         "audio_format": cfg.audio_format,
         "sample_rate": cfg.sample_rate,
@@ -159,6 +165,7 @@ def _asr_request_kwargs(
     kwargs: dict[str, Any] = {
         "app_id": cfg.app_id,
         "access_token": cfg.access_token,
+        "api_key": cfg.api_key,
         "audio_format": audio_format,
         "codec": codec,
         "sample_rate": sample_rate,
@@ -192,6 +199,7 @@ async def transcribe_async(
     segment_duration_ms: int = 200,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     resource_id: str | None = None,
     endpoint: str | None = None,
     config: DoubaoConfig | None = None,
@@ -199,6 +207,9 @@ async def transcribe_async(
     **extras: Any,
 ) -> str:
     """Asynchronously transcribe ``audio`` via Volcengine bigmodel streaming ASR.
+
+    Authenticate with ``api_key`` (new console) or the legacy
+    ``app_id`` / ``access_token`` pair.
 
     Parameters
     ----------
@@ -239,7 +250,11 @@ async def transcribe_async(
     str
         Final transcript (concatenated from all server-emitted utterances).
     """
-    cfg = config or DoubaoConfig.resolve(app_id=app_id, access_token=access_token)
+    cfg = config or DoubaoConfig.resolve(
+        app_id=app_id,
+        access_token=access_token,
+        api_key=api_key,
+    )
 
     # Lazy import — keeps top-level `import doubao_speech` free of websockets.
     from . import _ws_client
@@ -318,6 +333,7 @@ async def transcribe_stream_async(
     segment_duration_ms: int = 200,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     resource_id: str | None = None,
     endpoint: str | None = None,
     config: DoubaoConfig | None = None,
@@ -325,6 +341,9 @@ async def transcribe_stream_async(
     **extras: Any,
 ) -> AsyncIterator[dict[str, Any]]:
     """Stream transcription results from a live async audio source.
+
+    Authenticate with ``api_key`` (new console) or the legacy
+    ``app_id`` / ``access_token`` pair.
 
     Unlike :func:`transcribe_async` (which buffers a finite source and returns
     a single final string), this yields the incremental
@@ -344,7 +363,11 @@ async def transcribe_stream_async(
     dict
         ``{"text": str, "is_final": bool, "utterances": list}`` per update.
     """
-    cfg = config or DoubaoConfig.resolve(app_id=app_id, access_token=access_token)
+    cfg = config or DoubaoConfig.resolve(
+        app_id=app_id,
+        access_token=access_token,
+        api_key=api_key,
+    )
 
     from . import _ws_client
 
@@ -385,12 +408,16 @@ async def transcribe_microphone_async(
     enable_ddc: bool = True,
     app_id: str | None = None,
     access_token: str | None = None,
+    api_key: str | None = None,
     resource_id: str | None = None,
     config: DoubaoConfig | None = None,
     timeout: float = 30.0,
     **extras: Any,
 ) -> AsyncIterator[dict[str, Any]]:
     """Transcribe live microphone audio, yielding incremental results.
+
+    Authenticate with ``api_key`` (new console) or the legacy
+    ``app_id`` / ``access_token`` pair.
 
     Thin convenience wrapper that pipes :func:`doubao_speech.microphone_chunks`
     into :func:`transcribe_stream_async`. Requires the optional ``pyaudio``
@@ -434,6 +461,7 @@ async def transcribe_microphone_async(
         endpoint=endpoint,
         app_id=app_id,
         access_token=access_token,
+        api_key=api_key,
         resource_id=resource_id,
         config=config,
         timeout=timeout,
